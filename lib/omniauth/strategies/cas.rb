@@ -50,7 +50,7 @@ module OmniAuth
 
       credentials do
         prune!({
-          :ticket => @ticket
+          :casticket => @ticket
         })
       end
 
@@ -60,7 +60,7 @@ module OmniAuth
       end
 
       def callback_phase
-        @ticket = request.params['ticket']
+        @ticket = request.params['casticket']
 
         return fail!(:no_ticket, MissingCASTicket.new('No CAS Ticket')) unless @ticket
 
@@ -104,13 +104,12 @@ module OmniAuth
       # @param [String] service the service (a.k.a. return-to) URL
       # @param [String] ticket the ticket to validate
       #
-      # @return [String] a URL like `http://cas.mycompany.com/serviceValidate?service=...&ticket=...`
+      # @return [String] a URL like `http://cas.mycompany.com/serviceValidate?casurl=...&casticket=...`
       def service_validate_url(service_url, ticket)
         service_url = Addressable::URI.parse( service_url )
-        service_url.query_values = service_url.query_values.tap { |qs| qs.delete('ticket') }
+        service_url.query_values = service_url.query_values.tap { |qs| qs.delete('casticket') }
 
-        # cas_host + append_params(@options.service_validate_url, { :service => service_url.to_s, :ticket => ticket })
-        cas_host + append_params(@options.service_validate_url, { :service => service_url.to_s, :ticket => ticket })
+        cas_host + append_params(@options.service_validate_url, { :casurl => service_url.to_s, :casticket => ticket, :cassvc => "ANY" })
       end
 
       # Build a CAS login URL from +service+.
@@ -119,7 +118,7 @@ module OmniAuth
       #
       # @return [String] a URL like `http://cas.mycompany.com/login?service=...`
       def login_url(service)
-        cas_host + append_params( @options.login_url, { :service => service })
+        cas_host + append_params( @options.login_url, { :casurl => service, :cassvc => "ANY" })
       end
 
       # Adds URL-escaped +parameters+ to +base+.

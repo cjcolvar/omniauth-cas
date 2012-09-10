@@ -29,7 +29,15 @@ module OmniAuth
         #
         # @raise any connection errors encountered.
         def user_info
-          parse_user_info( find_authentication_success( get_service_response_body ) )
+          raw_text = get_service_response_body
+
+          #First check for CAS 1.0 IU response
+          if raw_text =~ /^(yes|no)\r(.*?)\r$/m
+            return nil unless $~[1] == 'yes'
+            return { 'name' => $~[2] }
+          end
+          
+          parse_user_info( find_authentication_success( raw_text ) )
         end
 
       private
