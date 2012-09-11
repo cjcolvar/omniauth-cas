@@ -66,7 +66,7 @@ module OmniAuth
 
         self.raw_info = ServiceTicketValidator.new(self, @options, callback_url, @ticket).user_info
 
-        return fail!(:invalid_ticket, InvalidCASTicket.new('Invalid CAS Ticket')) if raw_info.empty?
+        return fail!(:invalid_ticket, InvalidCASTicket.new('Invalid CAS Ticket')) if raw_info.nil? or raw_info.empty?
 
         super
       end
@@ -107,7 +107,10 @@ module OmniAuth
       # @return [String] a URL like `http://cas.mycompany.com/serviceValidate?casurl=...&casticket=...`
       def service_validate_url(service_url, ticket)
         service_url = Addressable::URI.parse( service_url )
-        service_url.query_values = service_url.query_values.tap { |qs| qs.delete('casticket') }
+        service_url.query_values = service_url.query_values.tap do |qs|
+          qs.delete('casticket')
+          qs.delete('cassvc')
+        end
 
         cas_host + append_params(@options.service_validate_url, { :casurl => service_url.to_s, :casticket => ticket, :cassvc => "ANY" })
       end

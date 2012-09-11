@@ -14,7 +14,7 @@ describe OmniAuth::Strategies::CAS, :type => :strategy do
 
   # TODO: Verify that these are even useful tests
   shared_examples_for "a CAS redirect response" do
-    let(:redirect_params) { "service=" + Rack::Utils.escape("http://example.org/auth/cas/callback?url=#{Rack::Utils.escape(return_url)}") }
+    let(:redirect_params) { "cassvc=ANY&casurl=" + Rack::Utils.escape("http://example.org/auth/cas/callback?url=#{Rack::Utils.escape(return_url)}") }
     before do
       get url, nil, request_env
     end
@@ -56,9 +56,9 @@ describe OmniAuth::Strategies::CAS, :type => :strategy do
 
   describe 'GET /auth/cas/callback with an invalid ticket' do
     before do
-      stub_request(:get, /^https:\/\/cas.example.org(:443)?\/serviceValidate\?([^&]+&)?ticket=9391d/).
+      stub_request(:get, /^https:\/\/cas.example.org(:443)?\/serviceValidate\?([^&]+&)?cassvc=ANY&casticket=9391d/).
          to_return( :body => File.read('spec/fixtures/cas_failure.xml') )
-      get '/auth/cas/callback?ticket=9391d'
+      get '/auth/cas/callback?cassvc=ANY&casticket=9391d'
     end
 
     subject { last_response }
@@ -69,25 +69,87 @@ describe OmniAuth::Strategies::CAS, :type => :strategy do
     end
   end
 
+  describe 'GET /auth/cas/callback with an invalid ticket' do
+    before do
+      stub_request(:get, /^https:\/\/cas.example.org(:443)?\/serviceValidate\?([^&]+&)?cassvc=ANY&casticket=9391d/).
+         to_return( :body => File.read('spec/fixtures/iu_cas_failure') )
+      get '/auth/cas/callback?cassvc=ANY&casticket=9391d'
+    end
+
+    subject { last_response }
+
+    it { should be_redirect }
+    it 'should have a failure message' do
+      subject.headers['Location'].should == "/auth/failure?message=invalid_ticket&strategy=cas"
+    end
+  end
+
+  describe 'GET /auth/cas/callback with a valid IU CAS 1.0 ticket' do
+    class MyCasProvider < OmniAuth::Strategies::CAS; end # TODO: Not really needed. just an alias but it requires the :name option which might confuse users...
+    def app
+      Rack::Builder.new {
+        use OmniAuth::Test::PhonySession
+        use MyCasProvider, :name => :cas, :host => 'cas.example.org'
+        run lambda { |env| [404, {'Content-Type' => 'text/plain'}, [env.key?('omniauth.auth').to_s]] }
+      }.to_app
+    end
+
+    let(:return_url) { "http://127.0.0.10/?some=parameter" }
+    before do
+      stub_request(:get, /^https:\/\/cas.example.org(:443)?\/serviceValidate\?([^&]+&)?cassvc=ANY&casticket=593af/).
+         with { |request| @request_uri = request.uri.to_s }.
+         to_return( :body => File.read('spec/fixtures/iu_cas_success') )
+
+      get "/auth/cas/callback?cassvc=ANY&casticket=593af&url=#{return_url}"
+    end
+
+    context "request.env['omniauth.auth']" do
+      subject { last_request.env['omniauth.auth'] }
+      it { should be_kind_of Hash }
+      its(:provider) { should == :cas }
+      its(:uid) { should == 'psegel'}
+
+      context "the info hash" do
+        subject { last_request.env['omniauth.auth']['info'] }
+        it { should have(0).items }
+      end
+      context "the extra hash" do
+        subject { last_request.env['omniauth.auth']['extra'] }
+        it { should have(1).items }
+        its('user') { should == 'psegel' }
+      end
+      context "the credentials hash" do
+        subject { last_request.env['omniauth.auth']['credentials'] }
+        it { should have(1).items }
+        its('casticket') { should == '593af' }
+      end
+    end
+  end
+
   describe 'GET /auth/cas/callback with a valid ticket' do
     let(:return_url) { "http://127.0.0.10/?some=parameter" }
     before do
-      stub_request(:get, /^https:\/\/cas.example.org(:443)?\/serviceValidate\?([^&]+&)?ticket=593af/).
+      stub_request(:get, /^https:\/\/cas.example.org(:443)?\/serviceValidate\?([^&]+&)?cassvc=ANY&casticket=593af/).
          with { |request| @request_uri = request.uri.to_s }.
          to_return( :body => File.read('spec/fixtures/cas_success.xml') )
 
-      get "/auth/cas/callback?ticket=593af&url=#{return_url}"
+      get "/auth/cas/callback?cassvc=ANY&casticket=593af&url=#{return_url}"
     end
 
-    it 'should strip the ticket parameter from the callback URL' do
-      @request_uri.scan('ticket=').length.should == 1
+    it 'should strip the casticket parameter from the callback URL' do
+      @request_uri.scan('casticket=').length.should == 1
+    end
+
+    it 'should strip the cassvc parameter from the callback URL' do
+      @request_uri.scan('cassvc=').length.should == 1
     end
 
     it "should properly encode the service URL" do
       WebMock.should have_requested(:get, "https://cas.example.org/serviceValidate")
         .with(:query => {
-          :ticket => "593af",
-          :service => "http://example.org/auth/cas/callback?url=" + Rack::Utils.escape("http://127.0.0.10/?some=parameter")
+          :cassvc => "ANY",
+          :casticket => "593af",
+          :casurl => "http://example.org/auth/cas/callback?url=" + Rack::Utils.escape("http://127.0.0.10/?some=parameter")
         })
     end
 
@@ -118,7 +180,7 @@ describe OmniAuth::Strategies::CAS, :type => :strategy do
       context "the credentials hash" do
         subject { last_request.env['omniauth.auth']['credentials'] }
         it { should have(1).items }
-        its('ticket') { should == '593af' }
+        its('casticket') { should == '593af' }
       end
     end
 

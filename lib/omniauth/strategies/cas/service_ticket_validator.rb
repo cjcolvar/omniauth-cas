@@ -33,8 +33,9 @@ module OmniAuth
 
           #First check for CAS 1.0 IU response
           if raw_text =~ /^(yes|no)\r(.*?)\r$/m
+            p "here with #{raw_text}"
             return nil unless $~[1] == 'yes'
-            return { 'name' => $~[2] }
+            return { @options[:uid_key].to_s => $~[2] }
           end
           
           parse_user_info( find_authentication_success( raw_text ) )
