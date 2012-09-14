@@ -32,8 +32,8 @@ module OmniAuth
           raw_text = get_service_response_body
 
           #First check for CAS 1.0 IU response
-          if raw_text =~ /^(yes|no)\r(.*?)\r$/m
-            p "here with #{raw_text}"
+          if raw_text =~ /^(yes|no)\r\n(.*?)\r\n$/m
+            #p "here with #{raw_text}: #{$~[1]}, #{@options[:uid_key].to_s} -> #{$~[2]}"
             return nil unless $~[1] == 'yes'
             return { @options[:uid_key].to_s => $~[2] }
           end
